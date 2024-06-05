@@ -467,7 +467,7 @@ if __name__ == "__main__":
     
     longest_python_code = extract_longest_python_code(answer)
     if longest_python_code:
-        with open("manim.py", "w") as file:
+        with open("manim_code.py", "w") as file:
             file.write(longest_python_code)
         print("Longest Python code written to manim.py")
     else:
