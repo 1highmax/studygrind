@@ -2,12 +2,9 @@
 creating manim videos from abstract science topics for students
 
 ```bash
-git clone https://github.com/ManimCommunity/manim.git # clone manim
-(cd manim ; rm -r .git) # deleting the git folder to avoid clogging the embedding api with copies of all files
-export DOCS_PATH=/where/you/cloned/manim
-export OPENAI_API_KEY=sk-proj-......... 
-python3 create.py # creates the embeddings vector database, takes very long, costs around 10cts
-python3 ask.py # uses the vector database to write manim scripts
-# manim.py is created automatically
-python3 manim.py # creates the video
+#helper_max includes all known functions and utilized langchain
+#helper marian includes all new additions for slideshow creation from videos, image feedback, and automatic code execution. Utilizes Openai completion syntax.
+new_ask.py # To run all old stuff with the new added functionalities.
+#custom_media is created with combined_images.jpg that contains the slideshow. Folder gets replaced every new execution of new_ask.py.
+# Ich glaube mit dem, Gitignore für my_db und cutom_media hab ich hart gefailed, aber egal xD
 ```
