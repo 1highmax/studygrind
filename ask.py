@@ -2,6 +2,7 @@ import os
 from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+import re
 
 # Ensure the OpenAI API key is set
 if "OPENAI_API_KEY" not in os.environ:
@@ -34,7 +35,7 @@ def refine_query_with_gpt4o(user_query):
         {"role": "system", "content": "You are giving instructions to an AI model that must write python scripts which create manim animations. Your input is an abstract topic, which you must map to a reasonable teaching lesson in a ca 5 second long manim video. the video may include text and animation. The AI you are instructing needs very detailed information about what kind of code to produce. \
          Below you have a list of possible components that the other AI might use. Select 10 of them that sound like they can achieve your lesson goal. \
          Tell him to pay attention to the visual layout and the coordinates on the screen. \
-         You do not write python code. Talk directly to the other model. Be detailed:\
+         You do not write python code. You do not define the layout. Talk directly to the other model. Be detailed:\
 ./CODE_OF_CONDUCT.md \
 ./conftest.py \
 ./docker/readme.md \
@@ -443,13 +444,35 @@ def refine_query_with_gpt4o(user_query):
     refined_query = response.content.strip()
     return refined_query
 
+def extract_longest_python_code(text):
+    code_blocks = re.findall(r"```python(.*?)```", text, re.DOTALL)
+    if not code_blocks:
+        return None
+    longest_code_block = max(code_blocks, key=len)
+    return longest_code_block.strip()
+
 # Example usage
 if __name__ == "__main__":
-    user_query = "I want to learn the physics of shooting an arrow in a curve"
+    user_query = "I want to learn the physics of ackermann steering"
     refined_query = refine_query_with_gpt4o(user_query)
     print(refined_query)
-    answer, source_docs = process_query(refined_query)
+    answer, source_docs = process_query(refined_query + "\ndo not split your python code into multiple segments. \
+                                        Give the entire python file instead. \
+                                        Do not include a main function. \
+                                        Position the text in a meaningful relation to the animation. \
+                                        Pay attention so that objects dont overlap each other, when new stuff is added. \
+                                        Delete old elements when new stuff is plotted \
+                                        Make sure to not render objects outside of the screen.")
     print("Response:", answer)
+    
+    longest_python_code = extract_longest_python_code(answer)
+    if longest_python_code:
+        with open("manim.py", "w") as file:
+            file.write(longest_python_code)
+        print("Longest Python code written to manim.py")
+    else:
+        print("No Python code found in the response.")
+    
     print("Source Documents:")
     for doc in source_docs:
         print(doc.metadata["source"])
