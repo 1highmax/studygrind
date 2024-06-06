@@ -2,6 +2,9 @@ import os
 from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
+
+
 import re
 
 # Ensure the OpenAI API key is set
@@ -14,13 +17,17 @@ embedding = OpenAIEmbeddings(openai_api_key=os.environ["OPENAI_API_KEY"], model=
 vectordb = Chroma(persist_directory=persist_directory, embedding_function=embedding)
 
 # Set up the retriever
-retriever = vectordb.as_retriever(search_kwargs={"k": 30})
+retriever = vectordb.as_retriever(search_kwargs={"k": 50})
 
 # Initialize the language model
-llm = ChatOpenAI(model_name="gpt-4o", openai_api_key=os.environ["OPENAI_API_KEY"])
+llm_gpt = ChatOpenAI(model_name="gpt-4o", openai_api_key=os.environ["OPENAI_API_KEY"])
+llm = ChatGoogleGenerativeAI(model="gemini-1.5-pro", openai_api_key=os.environ["GOOGLE_GENAI_API_KEY"])
 
 # Create the QA chain with return_source_documents set to True
 qa_chain = RetrievalQA.from_chain_type(llm=llm, chain_type="stuff", retriever=retriever, return_source_documents=True)
+
+qa_chain_gpt = RetrievalQA.from_chain_type(llm=llm_gpt, chain_type="stuff", retriever=retriever, return_source_documents=True)
+
 
 # Function to process user queries
 def process_query(query):
@@ -29,13 +36,22 @@ def process_query(query):
     source_docs = response["source_documents"]
     return answer, source_docs
 
+# Function to process user queries
+def process_query_gpt(query):
+    response = qa_chain.invoke({"query": query})
+    answer = response["result"]
+    source_docs = response["source_documents"]
+    return answer, source_docs
+
 # Function to refine the query using GPT-4
 def refine_query_with_gpt4o(user_query):
     messages = [
-        {"role": "system", "content": "You are giving instructions to an AI model that must write python scripts which create manim animations. Your input is an abstract topic, which you must map to a reasonable teaching lesson in a ca 5 second long manim video. the video may include text and animation. The AI you are instructing needs very detailed information about what kind of code to produce. \
-         Below you have a list of possible components that the other AI might use. Select 10 of them that sound like they can achieve your lesson goal. \
-         Tell him to pay attention to the visual layout and the coordinates on the screen. \
-         You do not write python code. You do not define the layout. Talk directly to the other model. Be detailed:\
+        {"role": "system", "content": "You are giving instructions to a designer that must write python scripts which create manim animations. Your input is an abstract topic, which you must map to a reasonable teaching lesson in a ca 20 second long manim video. the video may include text and animation. The designer you are instructing needs very detailed information about what kind of code to produce. \
+         Below you have a list of possible components that the designer might use. Select 20 of them that sound like they can achieve your lesson goal with very short reasons for each. \
+         If there is maths problems to be solve, solve them and separate everything into multiple scenes, which in turn consist of steps, so that the designer can draw it. \
+         Tell him exactly how the scenese should look like, describe all component, their orientation, and their purpose \
+         You do not write python code. You do not define the layout. Talk directly to the designer. Be detailed:\
+         Do not forget to suggest the reference components to the designer! \
 ./CODE_OF_CONDUCT.md \
 ./conftest.py \
 ./docker/readme.md \
@@ -453,16 +469,34 @@ def extract_longest_python_code(text):
 
 # Example usage
 if __name__ == "__main__":
-    user_query = "I want to learn the physics of ackermann steering"
+    user_query = "I want to learn this: " + """
+Gegeben sind die Punkte A 19 | 0 | 0 ( ), B 0 |19 | 0 ( ), E 12 | 0 | 7 ( ) und F 0 |12 | 7 ( )
+(vgl. Abbildung 1). Das Viereck ABFE liegt in der Ebene L.
+3 a) Weisen Sie nach, dass das Viereck ABFE ein Trapez mit zwei gleich langen
+Seiten ist.
+6 b) Bestimmen Sie eine Gleichung von L in Koordinatenform sowie die Größe φ
+des Winkels, den L mit der 1 2 x x -Ebene einschließt.
+(zur Kontrolle: x x x 19 0 123 + + −= ; φ 55 ≈ ° )
+"""
     refined_query = refine_query_with_gpt4o(user_query)
     print(refined_query)
-    answer, source_docs = process_query(refined_query + "\ndo not split your python code into multiple segments. \
+
+    with open("manim_docs.py", 'r') as file:
+        manim_docs = file.read()
+    answer, source_docs = process_query_gpt(refined_query + "\n\
+                                        PAY GREAT ATTENTION TO THESE IMPORTANT RULES:\
+                                        do not split your python code into multiple segments. \
                                         Give the entire python file instead. \
                                         Do not include a main function. \
                                         Position the text in a meaningful relation to the animation. \
                                         Pay attention so that objects dont overlap each other, when new stuff is added. \
                                         Delete old elements when new stuff is plotted \
-                                        Make sure to not render objects outside of the screen.")
+                                        Do not rely on any resources like images or svgs, create everything from scratch. \
+                                        No static resources are available, it would cause errors: could not find XYZ.svg \
+                                        Make sure to not render objects outside of the screen.\
+                                        avoid errors like this: LaTeX error Missing $ inserted.\
+                                        Use the following documentation on manim as reference for how its syntax works, \
+                                        what members exist, and how they are used:    " + manim_docs)
     print("Response:", answer)
     
     longest_python_code = extract_longest_python_code(answer)
